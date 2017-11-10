@@ -1,0 +1,9 @@
+expiringdict
+simplekv
+flask
+flask-script
+flask-admin
+flask-sqlalchemy
+requests
+readability-lxml
+feedparser
