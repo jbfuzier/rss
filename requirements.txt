@@ -1,4 +1,5 @@
 expiringdict
+lxml==3.2.5
 simplekv
 flask
 flask-script
