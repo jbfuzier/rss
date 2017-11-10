@@ -85,5 +85,5 @@ if __name__ == "__main__":
     # a = Rss('http://www.generation-nt.com/export/rss.xml')
     # a = Rss('www.pcinpact.com/include/news.xml')
     # Start app
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0', port=8080)
 
