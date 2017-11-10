@@ -23,7 +23,9 @@ logger.setLevel(logging.DEBUG)
 
 @app.route('/')
 def index():
-    url = request.args.get('url', '')
+    url = request.args.get('url', None)
+    if not url:
+        return ""
     return Rss(url).fetch()
      
 
