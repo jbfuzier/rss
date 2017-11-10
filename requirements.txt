@@ -1,5 +1,4 @@
 expiringdict
-https://pypi.python.org/packages/5b/c1/8754eec733046c811d500f72658da16e10feedc2b7c48ec94fd11cc64784/lxml-4.1.1-cp27-cp27m-manylinux1_x86_64.whl#md5=531515cd452ea9d1c332d68077d86200
 flask
 requests
 readability-lxml
