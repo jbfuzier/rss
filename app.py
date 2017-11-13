@@ -5,13 +5,74 @@ import requests
 import codecs
 import logging
 from time import mktime
-from datetime import datetime
+from datetime import datetime, timedelta
 from feedgen.feed import FeedGenerator
 from expiringdict import ExpiringDict
 from base64 import b64encode
 import logging
+import time
 from logging.config import dictConfig
+from logging.handlers import TimedRotatingFileHandler
+from sendgrid import sendgrid
 import os
+from flask import Flask, request, send_file
+import socket
+
+send_email = None
+
+
+def gen_stats():
+    global stats
+    s = ""
+    for k, v in stats.items():
+        ts = [t["time"] for t in v["requests"]]
+        t0 = ts[0]
+        delta_a = []
+        for e in range(len(ts)-1):
+            delta = ts[e+1] - t0
+            delta_a.append(delta)
+            t0 = ts[e+1]
+        avg_delta = "infinity"
+        if len(delta_a)!=0:
+            avg_delta = sum(delta_a, timedelta())/len(delta_a)
+        s += "For %s, %s requests, avg processing time = %s, delta between requests = %s\r\n\r\n"%(k, len(v["requests"]), sum(v["processing_time"], timedelta())/len(v["processing_time"]), avg_delta)
+        s += "\r\n".join(["%s - %s"%(e['time'], e['ip']) for e in v["requests"]])
+    send_email("Rss proxy stats", s)
+    stats = {}
+
+def error_report():
+    with open('logs/critical.log') as f:
+        t = f.read()
+        if len(t)>0:
+            send_email("Rss proxy errors", t)
+        else:
+            logger.info("No error in last period")
+        for handler in logger.handlers:
+            try:
+                handler.doRollover()
+            except:
+                pass
+
+def send_reporting_if_needed():
+    global last_error_reporting
+    global last_stats_reporting
+    stats_interval = os.environ.get('STATS_INTERVAL_SEC')
+    error_interval = os.environ.get('ERROR_REPORT_INTERVAL_SEC')
+    if not stats_interval:
+        stats_interval = 3600 * 24
+    if not error_interval:
+        error_interval = 3600 * 24
+    if (datetime.now() - last_stats_reporting) > timedelta(seconds=stats_interval):
+        logger.debug("Stats reporting")
+        #Report stat
+        gen_stats()
+        last_stats_reporting = datetime.now()
+    if (datetime.now() - last_error_reporting) > timedelta(seconds=error_interval):
+        #Report error
+        error_report()
+        logger.debug("Error reporting")
+        last_error_reporting = datetime.now()
+
 
 
 logging_config = dict(
@@ -27,12 +88,15 @@ logging_config = dict(
         'filedebug': {'class': 'logging.handlers.TimedRotatingFileHandler',
               'filename': 'logs/debug.log',
               'when': 'midnight',
+              'interval': 1,
               'backupCount': 7,
               'formatter': 'f',
               'level': logging.DEBUG},
         'filecritical': {'class': 'logging.handlers.TimedRotatingFileHandler',
               'filename': 'logs/critical.log',
               'when': 'midnight',
+              # 'when': 'M',
+              'interval': 1,
               'backupCount': 7,
               'formatter': 'f',
               'level': logging.ERROR},
@@ -47,9 +111,48 @@ dictConfig(logging_config)
 
 logger = logging.getLogger()
 
-store = ExpiringDict(max_len=2000, max_age_seconds=3600*48)
+def send_email(subject="test", body="test"):
+    apikey = os.environ.get('SENDGRID_API_KEY')
+    emailto = os.environ.get('EMAIL_TO')
+    if not apikey or not emailto:
+        logger.warning("No email will be send (SENDGRID_API_KEY, EMAIL_TO env variable not defined)")
+        return False
+    sg = sendgrid.SendGridAPIClient(apikey=apikey)
+    emailfrom = "root@%s"%socket.getfqdn()
+    data = {
+      "personalizations": [
+        {
+          "to": [
+            {
+              "email": emailto
+            }
+          ],
+          "subject": "%s"%subject
+        }
+      ],
+      "from": {
+        "email": emailfrom
+      },
+      "content": [
+        {
+          "type": "text/plain",
+          "value": "%s"%body
+        }
+      ]
+    }
+    try:
+        response = sg.client.mail.send.post(request_body=data)
+        logger.debug(response.status_code)
+        logger.debug(response.body)
+        logger.debug(response.headers)
+    except Exception as e:
+        logger.error("Got exception %s"%e)
+        logger.exception("Got exception %s"%e)
 
-from flask import Flask, request, send_file
+
+store = ExpiringDict(max_len=5000, max_age_seconds=3600*48)
+
+
 # Create application
 app = Flask(__name__)
 
@@ -65,9 +168,16 @@ def critical():
 @app.route('/')
 def index():
     url = request.args.get('url', None)
+    send_reporting_if_needed()
     if not url:
         return ""
+    global stats
+    new_feed = False
+    if not url in stats:
+        new_feed = True
+        stats[url] = {'processing_time': [], 'requests': [], 'last_cache_hits': 0}
     logger.info("Request from %s for %s"%(request.remote_addr, url))
+    stats[url]['requests'].append({'ip': request.remote_addr, 'time': datetime.now()})
     tstart = datetime.now()
     try:
         i, r = Rss(url).fetch()
@@ -77,7 +187,11 @@ def index():
         logger.exception(r)
         return r
     tend = datetime.now()
+    stats[url]['processing_time'].append(tend-tstart)
+    
     logger.info("Request from %s for %s took %s to complete (%s entries loaded)"%(request.remote_addr, url, tend-tstart, i))
+    if not new_feed and stats[url]['last_cache_hits'] == 0:
+        logger.error("No cache hit for %s (occurs on first request for a feed or if feeds are not pulled fast enough)"%url)
     return r
 
 class Rss():
@@ -85,6 +199,9 @@ class Rss():
         self.url = url
 
     def fetch(self):
+        global stats
+        url = self.url
+        stats[url]['last_cache_hits']=0
         url = self.url
         self.fg = FeedGenerator()
         logger.debug("Starting fetch for %s"%(url))
@@ -124,10 +241,12 @@ class Rss():
         fe.content(fetched_content)
 
     def __fetchFullArticle(self,url):
+        global stats
         key = b64encode(url)
         data = store.get(key)
         if data:
             logger.debug("Cache hit for %s"%url)
+            stats[self.url]['last_cache_hits']+=1
             return data
         logger.debug("fetching %s"%(url))
         tstart = datetime.now()
@@ -140,5 +259,9 @@ class Rss():
 
 
 if __name__ == "__main__":
+    stats = {}
+    last_stats_reporting = datetime.now()
+    last_error_reporting = datetime.now()
+    send_email("RSS app start", "Starting application...")
     app.run(debug=True, host='0.0.0.0', port=8080, threaded=True)
 

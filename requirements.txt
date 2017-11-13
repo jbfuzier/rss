@@ -4,3 +4,4 @@ requests
 readability-lxml
 feedparser
 feedgen
+sendgrid>=1.2
