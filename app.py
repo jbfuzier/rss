@@ -169,7 +169,6 @@ def critical():
 def index():
     url = request.args.get('url', None)
     send_reporting_if_needed()
-    time.sleep(10)
     if not url:
         return ""
     global stats
