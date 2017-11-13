@@ -169,6 +169,7 @@ def critical():
 def index():
     url = request.args.get('url', None)
     send_reporting_if_needed()
+    time.sleep(10)
     if not url:
         return ""
     global stats
@@ -263,5 +264,13 @@ if __name__ == "__main__":
     last_stats_reporting = datetime.now()
     last_error_reporting = datetime.now()
     send_email("RSS app start", "Starting application...")
-    app.run(debug=True, host='0.0.0.0', port=8080, threaded=True)
+    if os.environ.get('THREADED'):
+        threaded = True
+    else:
+        threaded = False
+    if os.environ.get('DEBUG'):
+        debug = True
+    else:
+        debug = False
+    app.run(debug=debug, host='0.0.0.0', port=8080, threaded=threaded)
 
