@@ -207,10 +207,11 @@ class Rss():
         logger.debug("Starting fetch for %s"%(url))
         d = feedparser.parse(url)
         self.fg.title(d.feed.title)
-        self.fg.updated(d.feed.updated)
+        # self.fg.updated(d.feed.updated)
         self.fg.description(d.feed.description)
         self.fg.link(d.feed.links)
         logger.debug("Got %s entries in the feed"%(len(d.entries)))
+        i = -1
         for i, e in enumerate(d.entries):
             try:
                 self.fetch_article(e)
