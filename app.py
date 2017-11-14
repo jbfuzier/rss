@@ -37,9 +37,15 @@ def gen_stats():
             avg_delta = sum(delta_a, timedelta())/len(delta_a)
         s += "For %s, %s requests, avg processing time = %s, delta between requests = %s\r\n\r\n"%(k, len(v["requests"]), sum(v["processing_time"], timedelta())/len(v["processing_time"]), avg_delta)
         s += "\r\n".join(["%s - %s"%(e['time'], e['ip']) for e in v["requests"]])
+    return s
+
+
+def send_stats():
+    global stats
+    s = gen_stats()
     send_email("Rss proxy stats", s)
     stats = {}
-
+    
 def error_report():
     with open('logs/critical.log') as f:
         t = f.read()
@@ -156,6 +162,9 @@ store = ExpiringDict(max_len=5000, max_age_seconds=3600*48)
 # Create application
 app = Flask(__name__)
 
+@app.route('/stats')
+def stats():
+    return gen_stats()
 
 @app.route('/debug')
 def debug():
