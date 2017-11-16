@@ -17,7 +17,7 @@ from sendgrid import sendgrid
 import os
 from flask import Flask, request, send_file
 import socket
-
+start_datetime = None
 send_email = None
 
 
@@ -174,6 +174,12 @@ def debug():
 def critical():
     return send_file('logs/critical.log', attachment_filename='critical.log')
 
+@app.route('/uptime')
+def uptime():
+    global start_datetime
+    if not start_datetime:
+        return "1st request"
+    return "Start time : %s    \r\nUptime : %s"%(start_datetime, datetime.now()-start_datetime)
 @app.route('/')
 def index():
     url = request.args.get('url', None)
@@ -271,6 +277,10 @@ class Rss():
 def before_first_request():
     logger.info("Application restarted")
     send_email("RSS app start", "Starting application...")
+    global start_datetime
+    start_datetime = datetime.now()
+        
+        
         
 if __name__ == "__main__":
     stats = {}
