@@ -267,12 +267,15 @@ class Rss():
         store[key] = readable_article
         return readable_article
 
-
+@app.before_first_request
+def before_first_request():
+    logger.info("Application restarted")
+    send_email("RSS app start", "Starting application...")
+        
 if __name__ == "__main__":
     stats = {}
     last_stats_reporting = datetime.now()
     last_error_reporting = datetime.now()
-    send_email("RSS app start", "Starting application...")
     if os.environ.get('THREADED'):
         threaded = True
     else:
