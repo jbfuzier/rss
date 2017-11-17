@@ -266,7 +266,7 @@ class Rss():
             return data
         logger.debug("fetching %s"%(url))
         tstart = datetime.now()
-        html = requests.get(url)
+        html = requests.get(url, verify=False)
         readable_article = Document(html.text).summary()
         logger.debug("It took %s to fetch %s"%(datetime.now()-tstart, url))
         # readable_title = Document(html).short_title()
