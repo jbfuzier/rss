@@ -15,6 +15,7 @@ from logging.config import dictConfig
 from logging.handlers import TimedRotatingFileHandler
 from sendgrid import sendgrid
 import os
+from urlparse import urlparse
 from flask import Flask, request, send_file
 import socket
 start_datetime = None
@@ -80,7 +81,9 @@ def send_reporting_if_needed():
         last_error_reporting = datetime.now()
 
 
-
+debug_path = os.environ.get('DEBUG_FILE_PATH')
+if not debug_path:
+    debug_path = 'logs/debug.log'
 logging_config = dict(
     version = 1,
     formatters = {
@@ -92,7 +95,7 @@ logging_config = dict(
               'formatter': 'f',
               'level': logging.INFO},
         'filedebug': {'class': 'logging.handlers.TimedRotatingFileHandler',
-              'filename': 'logs/debug.log',
+              'filename': debug_path,
               'when': 'midnight',
               'interval': 1,
               'backupCount': 7,
@@ -210,6 +213,7 @@ def index():
     return r
 
 class Rss():
+    blacklisted_domains = ExpiringDict(max_len=5000, max_age_seconds=3600*24)
     def __init__(self, url):
         self.url = url
 
@@ -264,9 +268,20 @@ class Rss():
             logger.debug("Cache hit for %s"%url)
             stats[self.url]['last_cache_hits']+=1
             return data
+        parsed_uri = urlparse(url)
+        domain = parsed_uri.netloc
+        if self.blacklisted_domains.get(domain):
+            msg = "Skipped blacklisted non responsive domain : %s"%domain
+            logger.warning(msg)
+            return msg
         logger.debug("fetching %s"%(url))
         tstart = datetime.now()
-        html = requests.get(url, verify=False)
+        try:
+            html = requests.get(url, verify=False, timeout=5)
+        except requests.exceptions.Timeout as e:
+            self.blacklisted_domains[domain] = True
+            logging.warning("Blacklisting non responsive domain : %s, %s"%(domain, e))
+            return str(e)
         readable_article = Document(html.text).summary()
         logger.debug("It took %s to fetch %s"%(datetime.now()-tstart, url))
         # readable_title = Document(html).short_title()
