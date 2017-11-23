@@ -236,7 +236,7 @@ class Rss():
                 self.fetch_article(e)
             except Exception as ex:
                 logger.error("Got exception while fetching %s : %s"%(e, ex))
-                logger.exception()
+                logger.exception("")
         return (i+1, self.fg.rss_str())
         
     def fetch_article(self, e):
@@ -245,7 +245,11 @@ class Rss():
         title = e['title']
         description = e['description']
         article_id = e['id']
-        published = datetime.now()
+        try:
+            published = e['updated_parsed']
+        except KeyError as e:
+            logger.debug("No parsable date in feed item, gonna use cuurent time")
+            published = datetime.now()
         try:
             fetched_content = self.__fetchFullArticle(url)
         except Exception as e:
