@@ -208,7 +208,7 @@ def index():
     stats[url]['processing_time'].append(tend-tstart)
     
     logger.info("Request from %s for %s took %s to complete (%s entries loaded)"%(request.remote_addr, url, tend-tstart, i))
-    if not new_feed and stats[url]['last_cache_hits'] == 0:
+    if not new_feed and stats[url]['last_cache_hits'] == 0 and i != 0:
         logger.error("No cache hit for %s (occurs on first request for a feed or if feeds are not pulled fast enough)"%url)
     return r
 
