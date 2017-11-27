@@ -171,7 +171,7 @@ def stats():
 
 @app.route('/debug')
 def debug():
-    return send_file('logs/debug.log', attachment_filename='debug.log')
+    return send_file(debug_path, attachment_filename='debug.log')
 
 @app.route('/critical')
 def critical():
