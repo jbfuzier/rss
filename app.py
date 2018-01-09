@@ -213,7 +213,7 @@ def index():
     return r
 
 class Rss():
-    blacklisted_domains = ExpiringDict(max_len=5000, max_age_seconds=3600*24)
+    blacklisted_domains = ExpiringDict(max_len=5000, max_age_seconds=3600*12)
     def __init__(self, url):
         self.url = url
 
@@ -280,12 +280,19 @@ class Rss():
             return msg
         logger.debug("fetching %s"%(url))
         tstart = datetime.now()
-        try:
-            html = requests.get(url, verify=False, timeout=5)
-        except requests.exceptions.Timeout as e:
-            self.blacklisted_domains[domain] = True
-            logging.warning("Blacklisting non responsive domain : %s, %s"%(domain, e))
-            return str(e)
+        loop = 0
+        while True:
+            try:
+                html = requests.get(url, verify=False, timeout=2)
+                break
+            except requests.exceptions.Timeout as e:
+                if loop >= 1:
+                    self.blacklisted_domains[domain] = True
+                    logging.warning("Blacklisting non responsive domain : %s, %s"%(domain, e))
+                    return str(e)
+                else:
+                    loop += 1
+                    logging.debug("Retrying...")
         readable_article = Document(html.text).summary()
         logger.debug("It took %s to fetch %s"%(datetime.now()-tstart, url))
         # readable_title = Document(html).short_title()
